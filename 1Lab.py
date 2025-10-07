@@ -1,4 +1,5 @@
 import numpy as np
+import noise
 from PIL import Image, ImageOps
 from math import *
 
@@ -194,6 +195,28 @@ for i in range(len(v)):
 
     #img_mat[y, x] = [y%255, x%255, 255]
 
+import noise
+import numpy as np
+
+
+def get_perlin_color(x, y, z=0.0, scale=0.01):
+    r = noise.pnoise3(x * scale, y * scale, z, octaves=6, persistence=0.5, lacunarity=2.0)
+    g = noise.pnoise3(x * scale + 100, y * scale, z, octaves=6, persistence=0.5, lacunarity=2.0)
+    b = noise.pnoise3(x * scale, y * scale + 100, z, octaves=6, persistence=0.5, lacunarity=2.0)
+
+    r = int((r + 1) * 127.5)
+    g = int((g + 1) * 127.5)
+    b = int((b + 1) * 127.5)
+
+    return [r, g, b]
+
+
+def draw_perlin_rainbow_line(img, x0, y0, x1, y1, time=0.0):
+    mid_x = (x0 + x1) / 2.0
+    mid_y = (y0 + y1) / 2.0
+
+    color = get_perlin_color(mid_x, mid_y, time)
+    draw_line6(img, x0, y0, x1, y1, color=color)
 
 for face in f:
     for i in range(len(face)):
@@ -207,7 +230,8 @@ for face in f:
         y1 = int(9000 * v[end_idx][1] + 1000)
 
         #draw_line6(img_mat, x0, y0, x1, y1)
-        draw_rainbow_line(img_mat, x0, y0, x1, y1)
+        draw_perlin_rainbow_line(img_mat, x0, y0, x1, y1)
+        #draw_rainbow_line(img_mat, x0, y0, x1, y1)
 
 img = Image.fromarray(img_mat, mode='RGB')
 
