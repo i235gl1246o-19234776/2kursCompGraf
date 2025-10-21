@@ -78,8 +78,8 @@ def draw_line4(img_mat, x0, y0, x1, y1, color=255):
 
 
 def draw_line5(img_mat, x0, y0, x1, y1, color=255):
-
     xchange = False
+
     if (abs(x0 - x1) < abs(y0 - y1)):
         x0, y0 = y0, x0
         x1, y1 = y1, x1
@@ -95,17 +95,14 @@ def draw_line5(img_mat, x0, y0, x1, y1, color=255):
     y_update = 1 if y1 > y0 else -1
 
     for x in range(int(x0), int(x1)):
-
         t = (x - x0)/(x1 - x0)
         y = round((1.0 - t) * y0 + t * y1)
 
         if (xchange):
             img_mat[int(x), int(y)] = color
 
-
         else:
             img_mat[int(y), int(x)] = color
-
 
         derror += dy
         if (derror > 0.5):
@@ -229,8 +226,8 @@ for face in f:
         x1 = int(9000 * v[end_idx][0] + 1000)
         y1 = int(9000 * v[end_idx][1] + 1000)
 
-        #draw_line6(img_mat, x0, y0, x1, y1)
-        draw_perlin_rainbow_line(img_mat, x0, y0, x1, y1)
+        draw_line6(img_mat, x0, y0, x1, y1)
+        #draw_perlin_rainbow_line(img_mat, x0, y0, x1, y1)
         #draw_rainbow_line(img_mat, x0, y0, x1, y1)
 
 img = Image.fromarray(img_mat, mode='RGB')
