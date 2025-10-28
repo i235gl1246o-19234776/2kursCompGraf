@@ -1,3 +1,6 @@
+import math
+
+import noise
 import numpy as np
 from PIL import Image, ImageOps
 from math import *
@@ -95,7 +98,7 @@ def draw_triangle(img_mat, x0, y0,x1,y1,x2,y2,z0, z1,z2,color=255):
                 if z_ < zBuffer[y][x]:
                     zBuffer[y][x] = z_
                     img_mat[y, x] = color
-                    print(f'Нарисовал точку{x,y}')
+                    #print(f'Нарисовал точку{x,y}')
 
 def normal(x0, y0,z0,x1,y1,z1,x2,y2,z2):
     v1 = [x1-x2, y1-y2, z1-z2]
@@ -151,6 +154,22 @@ img_mat = np.zeros((2000, 2000, 3), dtype=np.uint8)
     img_mat[y, x] = [y%255, x%255, 255]
     '''
 
+# Простая HSV → RGB (без библиотек)
+def hsv_to_rgb(h, s=0.8, v=0.9):
+    if s == 0.0: return (v, v, v)
+    i = int(h * 6.)
+    f = (h * 6.) - i
+    p, q, t = v * (1. - s), v * (1. - s * f), v * (1. - s * (1. - f))
+    if i % 6 == 0: r, g, b = v, t, p
+    if i == 1: r, g, b = q, v, p
+    if i == 2: r, g, b = p, v, t
+    if i == 3: r, g, b = p, q, v
+    if i == 4: r, g, b = t, p, v
+    if i == 5: r, g, b = v, p, q
+    return (int(r*255), int(g*255), int(b*255))
+
+
+
 for face in f:
     for i in range(len(face)):
 
@@ -171,7 +190,25 @@ for face in f:
         #draw_line5(img_mat, x0, y0, x1, y1, [255, 255, 255])
         n=normal(x0,y0,z0, x1,y1,z1, x2,y2,z2)
         p = -255*cos_sveta(n)
-        draw_triangle(img_mat, x0, y0, x1, y1, x2, y2, z0, z1, z2,[p, 0, 0])
+        #draw_triangle(img_mat, x0, y0, x1, y1, x2, y2, z0, z1, z2,[p, 0, 0])
+        scale = 0.1
+        x = (x0+x1+x2)/3
+        y = (y0+y1+y2)/3
+        z = (z0+z1+z2)/3
+        r = noise.pnoise3(x * scale, y * scale, z, octaves=6, persistence=0.5, lacunarity=2.0)
+        g = noise.pnoise3(x * scale + 100, y * scale, z, octaves=6, persistence=0.5, lacunarity=2.0)
+        b = noise.pnoise3(x * scale, y * scale + 100, z, octaves=6, persistence=0.5, lacunarity=2.0)
+
+        r = int(((r + 1) * 127.5) * 1.2)
+        g = int(((g + 1) * 127.5) * 0.9)
+        b = int(((b + 1) * 127.5) * 1.8)
+        r = min(255, r)*p
+        g = min(255, g)*p
+        b = min(255, b)*p
+
+        draw_triangle(img_mat, x0, y0, x1, y1, x2, y2, z0, z1, z2, [r,g,b])
+
+
 
 
 '''
@@ -186,4 +223,4 @@ for k in range(13):
 
 img = Image.fromarray(img_mat, mode='RGB')
 img = ImageOps.flip(img)
-img.save('img_model14.png')
+img.save('img_model15.png')
