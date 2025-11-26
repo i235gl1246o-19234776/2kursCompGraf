@@ -1,10 +1,6 @@
 import math
-
-import noise
 import numpy as np
 from PIL import Image, ImageOps
-from math import *
-import random
 
 def draw_line5(img_mat, x0, y0, x1, y1, color=255):
         xchange = False
@@ -80,7 +76,7 @@ def baricentric(x,y, x0, y0, x1, y1, x2, y2):
 
     return lambda0, lambda1, lambda2
 
-zBuffer = np.full((2000, 2000), np.inf, dtype=np.float32)
+
 
 def draw_triangle(img_mat, X, Y, Z, color=255):
 
@@ -110,13 +106,12 @@ def draw_triangle(img_mat, X, Y, Z, color=255):
                         #print(f'Нарисовал точку{x,y}')
                         #print(color)
 
-def draw_triangle_gouro(img_mat, X, Y, Z, I0, I1, I2, u0, v0):
+def draw_triangle_gouro(img_mat, X, Y, Z, I0, I1, I2):
     x0, x1, x2 = X
     y0, y1, y2 = Y
     z0, z1, z2 = Z
     if z0 <= 0 or z1 <= 0 or z2 <= 0: #должны быть выше 0
         return
-
 
     h, w = img_mat.shape[:2]
 
@@ -125,46 +120,19 @@ def draw_triangle_gouro(img_mat, X, Y, Z, I0, I1, I2, u0, v0):
     ymin = max(0, min(int(y0), int(y1), int(y2)))
     ymax = min(h-1, max(int(y0), int(y1), int(y2)))
 
-    lambda0, lambda1, lambda2 = baricentric(xmin, ymin, x0, y0, x1, y1, x2, y2)
-    if lambda0 == -1.0:
-        return
-
-    lambda0_dx = (y1 - y2) / ((x0 - x2) * (y1 - y2) - (x1 - x2) * (y0 - y2))
-    lambda1_dx = (y2 - y0) / ((x0 - x2) * (y1 - y2) - (x1 - x2) * (y0 - y2))
-    lambda2_dx = lambda0_dx - lambda1_dx
-
-    lambda0_dy = (x2 - x1) / ((x0 - x2) * (y1 - y2) - (x1 - x2) * (y0 - y2))
-    lambda1_dy = (x0 - x2) / ((x0 - x2) * (y1 - y2) - (x1 - x2) * (y0 - y2))
-    lambda2_dy = lambda0_dy - lambda1_dy
-
-    lambda0_new = lambda0 + (xmin - x0) * lambda0_dx + (ymin - y0) * lambda0_dy
-    lambda1_new = lambda1 + (xmin - x0) * lambda1_dx + (ymin - y0) * lambda1_dy
-    lambda2_new = lambda2 + (xmin - x0) * lambda2_dx + (ymin - y0) * lambda2_dy
-
     for y in range(ymin, ymax + 1):
-        lambda0_r = lambda0_new
-        lambda1_r = lambda1_new
-        lambda2_r = lambda2_new
         for x in range(xmin, xmax + 1):
-            if lambda0_r >= 0 and lambda1_r >= 0 and lambda2_r >= 0:
-                z_i = lambda0_r * z0 + lambda1_r * z1 + lambda2_r * z2
-
+            lambda0, lambda1, lambda2 = baricentric(x, y, x0, y0, x1, y1, x2, y2)
+            if lambda0 >= 0 and lambda1 >= 0 and lambda2 >= 0:
+                z_i = lambda0 * z0 + lambda1 * z1 + lambda2 * z2
                 if z_i < zBuffer[y, x]:
                     zBuffer[y, x] = z_i
 
-                    I_f = -255 * (lambda0_r * I0 + lambda1_r * I1 + lambda2_r * I2)
-                    if not math.isnan(I_f):
-                        color_val = max(0, min(255, int(I_f)))
-                        img_mat[y, x] = color_val
+                    I_f = lambda0 * I0 + lambda1 * I1 + lambda2 * I2
 
+                    color_val = max(0, min(255, int(255 * I_f)))
 
-            lambda0_r += lambda0_dx
-            lambda1_r += lambda1_dx
-            lambda2_r += lambda2_dx
-
-        lambda0_new += lambda0_dy
-        lambda1_new += lambda1_dy
-        lambda2_new += lambda2_dy
+                    img_mat[y, x] = [color_val, color_val, color_val]
 
 def normal(X, Y, Z):
     x0, x1, x2 = X
@@ -174,14 +142,22 @@ def normal(X, Y, Z):
 
     v1 = [x1-x2, y1-y2, z1-z2]
     v2 = [x1-x0, y1-y0, z1-z0]
-    n = np.cross(v1, v2)
+    n = np.cross(v2, v1) #было np.cross(v1,v2), применяем логику алгема
+    norm_val = np.linalg.norm(n)
+    if norm_val > 0:
+        n = n / norm_val
     return n
 
 
-def calculate_lighting_gouro(vert_norms, light_dir=np.array([0, 0, 1]), dtype = np.float32):
-    vert_norm = vert_norms / np.linalg.norm(vert_norms)
+
+def calculate_lighting_gouro(vert_norms, light_dir=np.array([0, 0, 1])):
+    if np.linalg.norm(vert_norms) > 0:
+        vert_norm = vert_norms / np.linalg.norm(vert_norms)
+
+    light_dir = light_dir / np.linalg.norm(light_dir)
+
     vertex_lighting = np.dot(vert_norm, light_dir)
-    return vertex_lighting
+    return max(0, vertex_lighting)
 
 def cos_sveta(n):
     l=[0,0,1]
@@ -274,8 +250,9 @@ v = parse_v(model)
 f = parse_f(model)
 
 img_mat = np.zeros((2000, 2000, 3), dtype=np.uint8)
+zBuffer = np.full((2000, 2000), np.inf, dtype=np.float32)
 
-alpha = np.radians(30)
+alpha = np.radians(60)
 beta = np.radians(120)
 gamma = np.radians(0)
 
@@ -288,88 +265,57 @@ c_z = sum(vi[2] for vi in v) / len(v)
 
 tx = -c_x
 ty = -c_y
-tz = -c_z
-tz += 2
+tz = -c_z + 2
 
 v_t = []
 for x,y,z in v:
     x_n, y_n, z_n = transform_vertex([x,y,z], alpha, beta, gamma, tx, ty, tz)
     v_t.append((x_n, y_n, z_n))
 v = v_t
-n_all=[]
-X_all = []
-Y_all = []
-Z_all = []
+
 v_n=[[0,0,0] for i in range(len(v))]
 
 for face in f:
-    for i in range(len(face)):
+    idx0, idx1, idx2 = face[0] - 1, face[1] - 1, face[2] - 1
 
-        x0 = v[face[i] - 1][0]
-        y0 = v[face[i] - 1][1]
-        z0 = v[face[i] - 1][2]
-        x1 = v[face[(i + 1) % len(face)] - 1][0]
-        y1 = v[face[(i + 1) % len(face)] - 1][1]
-        z1 = v[face[(i + 1) % len(face)] - 1][2]
-        x2 = v[face[2] - 1][0]
-        y2 = v[face[2] - 1][1]
-        z2 = v[face[2] - 1][2]
+    x0, y0, z0 = v[idx0]
+    x1, y1, z1 = v[idx1]
+    x2, y2, z2 = v[idx2]
 
-        X = [x0, x1, x2]
-        Y = [y0, y1, y2]
-        Z = [z0, z1, z2]
+    X = [x0, x1, x2]
+    Y = [y0, y1, y2]
+    Z = [z0, z1, z2]
 
-        n = normal(X, Y, Z)  # нормаль к полигону
+    n = normal(X, Y, Z)
 
-        n_all.append(n)
-        X_all.append(X)
-        Y_all.append(Y)
-        Z_all.append(Z)
-
-        v_n[face[0] - 1][0] += n[0]
-        v_n[face[0] - 1][1] += n[1]
-        v_n[face[0] - 1][2] += n[2]
-
-        v_n[face[1] - 1][0] += n[0]
-        v_n[face[1] - 1][1] += n[1]
-        v_n[face[1] - 1][2] += n[2]
-
-        v_n[face[2] - 1][0] += n[0]
-        v_n[face[2] - 1][1] += n[1]
-        v_n[face[2] - 1][2] += n[2]
-
+    v_n[idx0] +=n
+    v_n[idx1] += n
+    v_n[idx2] += n
 
 #нормализуем z
 for i in range(len(v_n)):
-    len_v_n = (v_n[i][0]**2 + v_n[i][1]**2+v_n[i][2]**2)**0.5
-    v_n[i][0] /= len_v_n
-    v_n[i][1] /= len_v_n
-    v_n[i][2] /= len_v_n
-idx=0
+    n_val = np.linalg.norm(v_n[i])
+    v_n[i][0] /= n_val
+    v_n[i][1] /= n_val
+    v_n[i][2] /= n_val
 
 for face in f:
-    for i in range(len(face)):
+    idx0, idx1, idx2 = face[0] - 1, face[1] - 1, face[2] - 1
+    x0, y0, z0 = v[idx0]
+    x1, y1, z1 = v[idx1]
+    x2, y2, z2 = v[idx2]
 
-        n = n_all[idx]
-        X = X_all[idx]
-        Y = Y_all[idx]
-        Z = Z_all[idx]
+    X = [x0, x1, x2]
+    Y = [y0, y1, y2]
+    Z = [z0, z1, z2]
 
-        X_, Y_, Z_ = projector_mutex(X, Y, Z, u0, v0)
-        idx_p = idx
-        if (face[0] - 1 < len(v_n) and face[1] - 1 < len(v_n) and face[2] - 1 < len(v_n)):
-            I0 = calculate_lighting_gouro(np.array(v_n[face[0] - 1]),
-                                          light_dir=np.array([0.0, 0.0, 1.0], dtype=np.float32))
-            I1 = calculate_lighting_gouro(np.array(v_n[face[1] - 1]),
-                                          light_dir=np.array([0.0, 0.0, 1.0], dtype=np.float32))
-            I2 = calculate_lighting_gouro(np.array(v_n[face[2] - 1]),
-                                          light_dir=np.array([0.0, 0.0, 1.0], dtype=np.float32))
+    X_, Y_, Z_ = projector_mutex(X, Y, Z, u0, v0)
 
-            if not (np.isnan(I0) or np.isnan(I1) or np.isnan(I2)):
-                draw_triangle_gouro(img_mat, X_, Y_, Z_, float(I0), float(I1), float(I2), u0, v0)
-        idx += 1
+    I0 = calculate_lighting_gouro(np.array(v_n[idx0]), np.array([0,0,1]))
+    I1 = calculate_lighting_gouro(np.array(v_n[idx1]), np.array([0,0,1]))
+    I2 = calculate_lighting_gouro(np.array(v_n[idx2]), np.array([0,0,1]))
 
-
+    draw_triangle_gouro(img_mat, X_, Y_, Z_, I0, I1, I2)
 
 
 img = Image.fromarray(img_mat, mode='RGB')
