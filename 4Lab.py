@@ -134,6 +134,40 @@ def draw_triangle_gouro(img_mat, X, Y, Z, I0, I1, I2):
 
                     img_mat[y, x] = [color_val, color_val, color_val]
 
+
+def draw_triangle_texture(img_mat, X, Y, Z, vt0, vt1, vt2,I0,I1,I2, texture_image, texture_size = (1024,1024)):
+    x0, x1, x2 = X
+    y0, y1, y2 = Y
+    z0, z1, z2 = Z
+    if z0 <= 0 or z1 <= 0 or z2 <= 0: #должны быть выше 0
+        return
+
+    h, w = img_mat.shape[:2]
+    w_tex, h_tex = texture_size
+
+    xmin = max(0, min(int(x0), int(x1), int(x2)))
+    xmax = min(w-1, max(int(x0), int(x1), int(x2)))
+    ymin = max(0, min(int(y0), int(y1), int(y2)))
+    ymax = min(h-1, max(int(y0), int(y1), int(y2)))
+
+    for y in range(ymin, ymax + 1):
+        for x in range(xmin, xmax + 1):
+            lambda0, lambda1, lambda2 = baricentric(x, y, x0, y0, x1, y1, x2, y2)
+            if lambda0 >= 0 and lambda1 >= 0 and lambda2 >= 0:
+                z_i = lambda0 * z0 + lambda1 * z1 + lambda2 * z2
+                if z_i < zBuffer[y, x]:
+                    zBuffer[y, x] = z_i
+
+                    I_f = lambda0 * I0 + lambda1 * I1 + lambda2 * I2
+                    u = lambda0 * vt0[0] + lambda1 * vt1[0] + lambda2 * vt2[0]
+                    v_coord = lambda0 * vt0[1] + lambda1 * vt1[1] + lambda2 * vt2[1]
+
+                    tex_x = int(u * (w_tex - 1))
+                    tex_y = int((1 - v_coord)*(h_tex - 1))
+
+                    color_val = I_f*texture_image[tex_y * w_tex + tex_x]
+                    img_mat[y, x] = color_val
+
 def normal(X, Y, Z):
     x0, x1, x2 = X
     y0, y1, y2 = Y
@@ -147,8 +181,6 @@ def normal(X, Y, Z):
     if norm_val > 0:
         n = n / norm_val
     return n
-
-
 
 def calculate_lighting_gouro(vert_norms, light_dir=np.array([0, 0, 1])):
     if np.linalg.norm(vert_norms) > 0:
@@ -174,6 +206,17 @@ def parse_v(f):
                 vect.append((x,y,z))
     return vect
 
+def parse_vt(f):
+    vt_list = []
+    with open(f, 'r') as file:
+        for line in file:
+            if line.startswith('vt '):
+                parts = line.strip().split()
+                u = float(parts[1])
+                v = float(parts[2])
+                vt_list.append((u, v))
+    return vt_list
+
 def parse_f(f):
     vect = []
 
@@ -187,6 +230,26 @@ def parse_f(f):
                     m.append(int(l))
                 vect.append(m)
     return vect
+
+def parse_f_with_texture(f):
+    faces_v = []
+    faces_vt = []
+    with open(f, 'r') as file:
+        for line in file:
+            if line.startswith('f '):
+                parts = line.strip().split()
+                v_indices = []
+                vt_indices = []
+                for part in parts[1:]:
+                    data = part.split('/')
+                    v_indices.append(int(data[0]))
+                    if len(data) > 1 and data[1] != '':
+                        vt_indices.append(int(data[1]))
+                    else:
+                        vt_indices.append(0)
+                faces_v.append(v_indices)
+                faces_vt.append(vt_indices)
+    return faces_v, faces_vt
 
 def transform_vertex(V, alpha, beta, gamma, tx, ty, tz):
 
@@ -246,8 +309,12 @@ def projector_mutex(X, Y, Z, u0, v0):
     return [x0_n, x1_n, x2_n], [y0_n, y1_n, y2_n], [z0, z1, z2]
 
 model = 'model_1.obj'
+texture = Image.open('bunny-atlas.jpg').convert('RGB')
+texture_data = np.array(texture).reshape((-1, 3))
+texture_size = texture.size
 v = parse_v(model)
-f = parse_f(model)
+vt_list = parse_vt(model)
+f,f_vt = parse_f_with_texture(model)
 
 img_mat = np.zeros((2000, 2000, 3), dtype=np.uint8)
 zBuffer = np.full((2000, 2000), np.inf, dtype=np.float32)
@@ -299,7 +366,15 @@ for i in range(len(v_n)):
     v_n[i][1] /= n_val
     v_n[i][2] /= n_val
 
-for face in f:
+for i, face in enumerate(f):
+
+    if i < len(f_vt):
+        vt_ind = f_vt[i]
+
+        vt0 = vt_list[vt_ind[0] - 1]
+        vt1 = vt_list[vt_ind[1] - 1]
+        vt2 = vt_list[vt_ind[2] - 1]
+
     idx0, idx1, idx2 = face[0] - 1, face[1] - 1, face[2] - 1
     x0, y0, z0 = v[idx0]
     x1, y1, z1 = v[idx1]
@@ -315,7 +390,8 @@ for face in f:
     I1 = calculate_lighting_gouro(np.array(v_n[idx1]), np.array([0,0,1]))
     I2 = calculate_lighting_gouro(np.array(v_n[idx2]), np.array([0,0,1]))
 
-    draw_triangle_gouro(img_mat, X_, Y_, Z_, I0, I1, I2)
+    #draw_triangle_gouro(img_mat, X_, Y_, Z_, I0, I1, I2)
+    draw_triangle_texture(img_mat, X_, Y_, Z_, vt0, vt1, vt2, I0, I1, I2, texture_data)
 
 
 img = Image.fromarray(img_mat, mode='RGB')
